@@ -38,13 +38,14 @@ jobs:
           WEB_PWD:   ${{ secrets.WEBPASSWORD }}
           OTA_PWD:   ${{ secrets.OTAPASSWORD }}
         run: |
-          sed -i -e 's/\!secret WifiSsid/%WIFI_SSID%/g' scoreboard.yaml
-          sed -i -e 's/\!secret WifiPassword/%WIFI_PWD%/g' scoreboard.yaml
-          sed -i -e 's/\!secret APSsid/%AP_SSID%/g' scoreboard.yaml
-          sed -i -e 's/\!secret APPassword/%AP_PWD%/g' scoreboard.yaml
-          sed -i -e 's/\!secret WebUser/%WEB_USER%/g' scoreboard.yaml
-          sed -i -e 's/\!secret WebPwd/%WEB_PWD%/g' scoreboard.yaml
-          sed -i -e 's/\!secret OTAPassword/%OTA_PWD%/g' scoreboard.yaml
+          sed -i -e 's/\!secret WifiSsid/$WIFI_SSID/g' scoreboard.yaml
+          sed -i -e 's/\!secret WifiPassword/$WIFI_PWD/g' scoreboard.yaml
+          sed -i -e 's/\!secret APSsid/$AP_SSID/g' scoreboard.yaml
+          sed -i -e 's/\!secret APPassword/$AP_PWD/g' scoreboard.yaml
+          sed -i -e 's/\!secret WebUser/$WEB_USER/g' scoreboard.yaml
+          sed -i -e 's/\!secret WebPwd/$WEB_PWD/g' scoreboard.yaml
+          sed -i -e 's/\!secret OTAPassword/$OTA_PWD/g' scoreboard.yaml
+          cat scoreboard.yaml
 
       - uses: esphome/build-action@v6
         with:
