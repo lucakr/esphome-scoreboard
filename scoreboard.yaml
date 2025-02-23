@@ -1,0 +1,437 @@
+esphome:
+  name: scoreboard
+  friendly_name: Scoreboard
+
+esp32:
+  board: esp32dev #seeed_xiao_esp32c3
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+web_server:
+  port: 80
+  auth:
+    username: !secret WebUser
+    password: !secret WebPassword
+  ota: true
+  local: true
+  log: false
+  version: 3
+  sorting_groups:
+  - id: scores_group
+    name: "Score"
+    sorting_weight: 10
+  - id: timer_group
+    name: "Timer"
+    sorting_weight: 20
+
+ota:
+  - platform: esphome
+    password: !secret OTAPassword
+
+wifi:
+  ssid: !secret WifiSsid
+  password: !secret WifiPassword
+  fast_connect: on
+  use_address: scoreboard.local
+  # Optional manual IP
+  # manual_ip:
+  #   static_ip: 192.168.0.123
+  #   gateway: 192.168.0.1
+  #   subnet: 255.255.255.0
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: !secret APSsid
+    password: !secret APPassword
+    
+substitutions:
+  # Limits of the display
+  max_timer:    '45'
+  max_score:    '19'
+
+  # Mapping of the display segments to the I/O expander bit
+  home_ten:     '9'
+  home_a:       '0'
+  home_b:       '14'
+  home_c:       '1'
+  home_d:       '15'
+  home_e:       '8'
+  home_f:       '22'
+  home_g:       '3'
+
+  away_ten:     '29'
+  away_a:       '25'
+  away_b:       '27'
+  away_c:       '24'
+  away_d:       '26'
+  away_e:       '28'
+  away_f:       '30'
+  away_g:       '31'
+
+  timer_ten_a:  '21'
+  timer_ten_b:  '4'
+  timer_ten_c:  '18'
+  timer_ten_d:  '23'
+  timer_ten_e:  '19'
+  timer_ten_f:  '20'
+  timer_ten_g:  '2'
+  timer_one_a:  '5'
+  timer_one_b:  '10'
+  timer_one_c:  '7'
+  timer_one_d:  '11'
+  timer_one_e:  '12'
+  timer_one_f:  '6'
+  timer_one_g:  '13'
+
+# IO Expanders
+i2c:
+  sda: GPIO10
+  scl: GPIO9
+  scan: false
+  id: i2c_bus
+
+number:
+  ## INTERNAL
+
+  - platform: template
+    id: home_score
+    internal: true
+    restore_value: true
+    min_value: 0
+    max_value: $max_score
+    step: 1
+    optimistic: true
+
+  - platform: template
+    id: away_score
+    internal: true
+    restore_value: true
+    min_value: 0
+    max_value: $max_score
+    step: 1
+    optimistic: true
+
+  - platform: template
+    id: timer
+    internal: true
+    restore_value: false
+    min_value: 0
+    max_value: $max_timer
+    initial_value: $max_timer
+    step: 1
+    optimistic: true
+    on_value:
+      - number.set:
+          id: display_timer
+          value: !lambda "return id(timer).state;"
+
+  ## GUI
+
+  - platform: template
+    name: "Timer Value"
+    id: display_timer
+    restore_value: false
+    mode: slider
+    icon: "mdi:clock-outline"
+    web_server:
+      sorting_group_id: timer_group
+      sorting_weight: 30
+    min_value: 0
+    max_value: $max_timer
+    initial_value: $max_timer
+    step: 1
+    optimistic: true
+
+switch:
+  - platform: template
+    name: "Score On/Off"
+    id: score_enable
+    restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: true
+    icon: "mdi:power"
+    web_server:
+      sorting_group_id: scores_group
+      sorting_weight: 10
+    on_turn_on:
+      - number.to_min: home_score
+      - number.to_min: away_score
+      - script.execute: update_display
+    on_turn_off:
+      - number.to_min: home_score
+      - number.to_min: away_score
+      - script.execute: update_display
+
+  - platform: template
+    name: "Timer On/Off"
+    id: timer_enable
+    restore_mode: ALWAYS_OFF 
+    optimistic: true
+    icon: "mdi:power"
+    web_server:
+      sorting_group_id: timer_group
+      sorting_weight: 10
+    on_turn_on:
+      - switch.turn_off: timer_running
+    on_turn_off:
+      - switch.turn_off: timer_running
+
+  - platform: template
+    id: timer_running
+    internal: true
+    restore_mode: ALWAYS_OFF
+    optimistic: true
+    on_turn_on:
+      - number.set:
+          id: timer
+          value: !lambda "return id(display_timer).state;"
+      - script.execute: update_display
+      - script.execute: run_timer
+    on_turn_off:
+      - script.stop: run_timer
+      - script.execute: update_display
+
+binary_sensor:
+  - platform: switch
+    name: "Timer Running"
+    source_id: timer_running
+    icon: "mdi:timer"
+    web_server:
+      sorting_group_id: timer_group
+      sorting_weight: 20
+
+button:
+  ## TIMER
+
+  - platform: template
+    name: Timer Start/Stop
+    id: timer_start_stop
+    icon: "mdi:play-pause"
+    web_server:
+      sorting_group_id: timer_group
+      sorting_weight: 40
+    on_press:
+      - if:
+          condition:
+            - switch.is_on: timer_enable
+            - number.in_range:
+                id: display_timer
+                above: 1 # inclusive
+          then:
+            - if:
+                condition:
+                  - switch.is_on: timer_running
+                then:
+                  - switch.turn_off: timer_running
+                else:
+                  - switch.turn_on: timer_running
+
+  ## RESET
+
+  - platform: template
+    name: Reset Score
+    id: score_reset
+    icon: "mdi:restart"
+    web_server:
+      sorting_group_id: scores_group
+      sorting_weight: 20
+    on_press:
+      - if:
+          condition:
+            - switch.is_on: score_enable
+          then:
+            - number.to_min: home_score
+            - number.to_min: away_score
+            - script.execute: update_display
+
+  ## HOME
+
+  - platform: template
+    name: "Home Increase"
+    id: home_increment
+    web_server:
+      sorting_group_id: scores_group
+      sorting_weight: 30
+    icon: "mdi:arrow-up-bold"
+    on_press:
+      - if:
+          condition:
+            - switch.is_on: score_enable
+          then:
+            - number.increment:
+                id: home_score
+                cycle: false
+            - script.execute: update_display
+
+  - platform: template
+    name: "Home Decrease"
+    id: home_decrement
+    web_server:
+      sorting_group_id: scores_group
+      sorting_weight: 40
+    icon: "mdi:arrow-down-bold"
+    on_press:
+      - if:
+          condition:
+            - switch.is_on: score_enable
+          then:
+            - number.decrement:
+                id: home_score
+                cycle: false
+            - script.execute: update_display
+
+  ## AWAY
+
+  - platform: template
+    name: "Away Increase"
+    id: away_increment
+    web_server:
+      sorting_group_id: scores_group
+      sorting_weight: 50
+    icon: "mdi:arrow-up-bold-outline"
+    on_press:
+      - if:
+          condition:
+            - switch.is_on: score_enable
+          then:
+            - number.increment:
+                id: away_score
+                cycle: false
+            - script.execute: update_display
+
+  - platform: template
+    name: "Away Decrease"
+    id: away_decrement
+    web_server:
+      sorting_group_id: scores_group
+      sorting_weight: 60
+    icon: "mdi:arrow-down-bold-outline"
+    on_press:
+      - if:
+          condition:
+            - switch.is_on: score_enable
+          then:
+            - number.decrement:
+                id: away_score
+                cycle: false
+            - script.execute: update_display
+
+script:
+  # Runs the timer
+  - id: run_timer
+    mode: restart
+    then:
+      - while:
+          condition:
+            - number.in_range:
+                id: timer
+                above: 1 # inclusive
+          then:
+            - delay: 60s
+            - number.decrement:
+                  id: timer
+                  cycle: false
+            - script.execute: update_display
+      # Uncomment line below to stop the timer when it runs out
+      # - switch.turn_off: timer_running
+
+  # Updates the duration to the numbers inputs
+  - id: update_display
+    mode: restart
+    then:
+      - lambda: |-
+          // Score segments that need to be lit for [0-19]
+          // {A, B, C, D, E, F, G, T}
+          // Highest value ('T') is used to denote 'Tens'
+          // Defining this here cause its kinda a mess and isn't relevant to the rest of the ESPHome system
+          const uint32_t digitMapArray[20][8] = {
+            {1, 1, 1, 1, 1, 1, 0, 0},
+            {0, 1, 1, 0, 0, 0, 0, 0},
+            {1, 1, 0, 1, 1, 0, 1, 0},
+            {1, 1, 1, 1, 0, 0, 1, 0},
+            {0, 1, 1, 0, 0, 1, 1, 0},
+            {1, 0, 1, 1, 0, 1, 1, 0},
+            {1, 0, 1, 1, 1, 1, 1, 0},
+            {1, 1, 1, 0, 0, 0, 0, 0},
+            {1, 1, 1, 1, 1, 1, 1, 0},
+            {1, 1, 1, 1, 0, 1, 1, 0},
+            {1, 1, 1, 1, 1, 1, 0, 1},
+            {0, 1, 1, 0, 0, 0, 0, 1},
+            {1, 1, 0, 1, 1, 0, 1, 1},
+            {1, 1, 1, 1, 0, 0, 1, 1},
+            {0, 1, 1, 0, 0, 1, 1, 1},
+            {1, 0, 1, 1, 0, 1, 1, 1},
+            {1, 0, 1, 1, 1, 1, 1, 1},
+            {1, 1, 1, 0, 0, 0, 0, 1},
+            {1, 1, 1, 1, 1, 1, 1, 1},
+            {1, 1, 1, 1, 0, 1, 1, 1}};
+
+          uint32_t output = 0;
+
+          // Remap the bits dependong on display states using substitution
+          if (id(score_enable).state) {
+            uint8_t home_score_val = id(home_score).state;
+            output |= digitMapArray[home_score_val][0] << id($home_a);
+            output |= digitMapArray[home_score_val][1] << id($home_b);
+            output |= digitMapArray[home_score_val][2] << id($home_c);
+            output |= digitMapArray[home_score_val][3] << id($home_d);
+            output |= digitMapArray[home_score_val][4] << id($home_e);
+            output |= digitMapArray[home_score_val][5] << id($home_f);
+            output |= digitMapArray[home_score_val][6] << id($home_g);
+            output |= digitMapArray[home_score_val][7] << id($home_ten);
+
+            uint8_t away_score_val = id(away_score).state;
+            output |= digitMapArray[away_score_val][0] << id($away_a);
+            output |= digitMapArray[away_score_val][1] << id($away_b);
+            output |= digitMapArray[away_score_val][2] << id($away_c);
+            output |= digitMapArray[away_score_val][3] << id($away_d);
+            output |= digitMapArray[away_score_val][4] << id($away_e);
+            output |= digitMapArray[away_score_val][5] << id($away_f);
+            output |= digitMapArray[away_score_val][6] << id($away_g);
+            output |= digitMapArray[away_score_val][7] << id($away_ten);
+          }
+
+          if (id(timer_enable).state) {
+            if (id(timer_running).state) {
+              uint8_t timer_val = id(timer).state;
+              uint8_t timer_tens = timer_val / 10;
+              uint8_t timer_ones = timer_val % 10;
+
+              output |= digitMapArray[timer_tens][0] << id($timer_ten_a);
+              output |= digitMapArray[timer_tens][1] << id($timer_ten_b);
+              output |= digitMapArray[timer_tens][2] << id($timer_ten_c);
+              output |= digitMapArray[timer_tens][3] << id($timer_ten_d);
+              output |= digitMapArray[timer_tens][4] << id($timer_ten_e);
+              output |= digitMapArray[timer_tens][5] << id($timer_ten_f);
+              output |= digitMapArray[timer_tens][6] << id($timer_ten_g);
+
+              output |= digitMapArray[timer_ones][0] << id($timer_one_a);
+              output |= digitMapArray[timer_ones][1] << id($timer_one_b);
+              output |= digitMapArray[timer_ones][2] << id($timer_one_c);
+              output |= digitMapArray[timer_ones][3] << id($timer_one_d);
+              output |= digitMapArray[timer_tens][4] << id($timer_one_e);
+              output |= digitMapArray[timer_ones][5] << id($timer_one_f);
+              output |= digitMapArray[timer_ones][6] << id($timer_one_g);
+            }
+            else
+            {
+              // Display '--' when timer not running
+              output |= 1 << id($timer_ten_g);
+              output |= 1 << id($timer_one_g);
+            }
+          }
+
+          // Invert the outputs to match the relay behaviour
+          output ^= 0xFFFFFFFF;
+
+          // Breakdown the bytes
+          const uint8_t addr_1 = 0x20;
+          const uint8_t addr_2 = 0x21;
+          uint8_t bus_1[2] = {(uint8_t) output, (uint8_t)(output >> 8)};
+          uint8_t bus_2[2] = {(uint8_t)(output >> 16), (uint8_t)(output >> 24)};
+          
+          // Write
+          id(i2c_bus).write(addr_1, bus_1, sizeof(bus_1));
+          id(i2c_bus).write(addr_2, bus_2, sizeof(bus_2));
