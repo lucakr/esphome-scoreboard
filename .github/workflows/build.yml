@@ -28,13 +28,13 @@ jobs:
       - name: 'Secrets replacement'
         shell: bash
         env:
-          WIFI_SSID: ${{ secrets.WifiSsid }}
-          WIFI_PWD:  ${{ secrets.WifiPassword }}
-          AP_SSID:   ${{ secrets.APSsid }}
-          AP_PWD:    ${{ secrets.APPassword }}
-          WEB_USER:  ${{ secrets.WebUser }}
-          WEB_PWD:   ${{ secrets.WebPwd }}
-          OTA_PWD:   ${{ secrets.OTAPassword }}
+          WIFI_SSID: ${{ secrets.WIFISSID }}
+          WIFI_PWD:  ${{ secrets.WIFIPASSWORD }}
+          AP_SSID:   ${{ secrets.APSSID }}
+          AP_PWD:    ${{ secrets.APPASSWORD }}
+          WEB_USER:  ${{ secrets.WEBUSER }}
+          WEB_PWD:   ${{ secrets.WEBPASSWORD }}
+          OTA_PWD:   ${{ secrets.OTAPASSWORD }}
         run: |
           sed -i -e 's/\!secret WifiSsid/%WIFI_SSID%/g' scoreboard.yaml
           sed -i -e 's/\!secret WifiPassword/%WIFI_PWD%/g' scoreboard.yaml
