@@ -15,12 +15,14 @@ on:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  name: Build for development
+  development:
+    name: Build for development
     uses: ./.github/workflows/build.yml
     with:
       environment: "development"
 
-  name: Build for production
-    uses: ./.github/worklfows/build.yml
+  production:
+    name: Build for production
+    uses: ./.github/workflows/build.yml
     with:
       environment: "production"
