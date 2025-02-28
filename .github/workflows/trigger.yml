@@ -19,10 +19,10 @@ jobs:
     name: Build for development
     uses: ./.github/workflows/build.yml
     with:
-      environment: "development"
+      environment: development
 
   production:
     name: Build for production
     uses: ./.github/workflows/build.yml
     with:
-      environment: "production"
+      environment: gtsc
