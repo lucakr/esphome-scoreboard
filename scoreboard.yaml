@@ -2,10 +2,19 @@ esphome:
   name: scoreboard
   friendly_name: Scoreboard
 
+  on_boot:
+    then:
+      - lambda: !lambda |-
+          uint8_t io_expander_setup[] = {0x00, 0x00};
+          id(io_expander_1).write_bytes(0x06, io_expander_setup, sizeof(io_expander_setup));
+          id(io_expander_2).write_bytes(0x06, io_expander_setup, sizeof(io_expander_setup));
+
 esp32:
-  board: esp32dev #seeed_xiao_esp32c3
+  board: seeed_xiao_esp32s3
   framework:
     type: arduino
+    version: latest
+    platform_version: 6.3.2
 
 # Enable logging
 logger:
@@ -88,10 +97,16 @@ substitutions:
 
 # IO Expanders
 i2c:
-  sda: GPIO10
-  scl: GPIO9
+  sda: GPIO9
+  scl: GPIO8
   scan: false
   id: i2c_bus
+
+i2c_device:
+  - id: io_expander_1
+    address: 0x20
+  - id: io_expander_2
+    address: 0x21
 
 number:
   ## INTERNAL
@@ -399,19 +414,22 @@ script:
               uint8_t timer_tens = timer_val / 10;
               uint8_t timer_ones = timer_val % 10;
 
-              output |= digitMapArray[timer_tens][0] << id($timer_ten_a);
-              output |= digitMapArray[timer_tens][1] << id($timer_ten_b);
-              output |= digitMapArray[timer_tens][2] << id($timer_ten_c);
-              output |= digitMapArray[timer_tens][3] << id($timer_ten_d);
-              output |= digitMapArray[timer_tens][4] << id($timer_ten_e);
-              output |= digitMapArray[timer_tens][5] << id($timer_ten_f);
-              output |= digitMapArray[timer_tens][6] << id($timer_ten_g);
+              if (timer_tens > 0)
+              {
+                output |= digitMapArray[timer_tens][0] << id($timer_ten_a);
+                output |= digitMapArray[timer_tens][1] << id($timer_ten_b);
+                output |= digitMapArray[timer_tens][2] << id($timer_ten_c);
+                output |= digitMapArray[timer_tens][3] << id($timer_ten_d);
+                output |= digitMapArray[timer_tens][4] << id($timer_ten_e);
+                output |= digitMapArray[timer_tens][5] << id($timer_ten_f);
+                output |= digitMapArray[timer_tens][6] << id($timer_ten_g);
+              }
 
               output |= digitMapArray[timer_ones][0] << id($timer_one_a);
               output |= digitMapArray[timer_ones][1] << id($timer_one_b);
               output |= digitMapArray[timer_ones][2] << id($timer_one_c);
               output |= digitMapArray[timer_ones][3] << id($timer_one_d);
-              output |= digitMapArray[timer_tens][4] << id($timer_one_e);
+              output |= digitMapArray[timer_ones][4] << id($timer_one_e);
               output |= digitMapArray[timer_ones][5] << id($timer_one_f);
               output |= digitMapArray[timer_ones][6] << id($timer_one_g);
             }
@@ -427,11 +445,9 @@ script:
           output ^= 0xFFFFFFFF;
 
           // Breakdown the bytes
-          const uint8_t addr_1 = 0x20;
-          const uint8_t addr_2 = 0x21;
           uint8_t bus_1[2] = {(uint8_t) output, (uint8_t)(output >> 8)};
           uint8_t bus_2[2] = {(uint8_t)(output >> 16), (uint8_t)(output >> 24)};
           
           // Write
-          id(i2c_bus).write(addr_1, bus_1, sizeof(bus_1));
-          id(i2c_bus).write(addr_2, bus_2, sizeof(bus_2));
+          id(io_expander_1).write_bytes(0x02, bus_1, sizeof(bus_1));
+          id(io_expander_2).write_bytes(0x02, bus_2, sizeof(bus_2));
