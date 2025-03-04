@@ -198,13 +198,13 @@ switch:
     internal: true
     restore_mode: ALWAYS_OFF
     optimistic: true
-    on_turn_on:
+    turn_on_action:
       - number.set:
           id: timer
           value: !lambda "return id(display_timer).state;"
       - script.execute: update_display
       - script.execute: run_timer
-    on_turn_off:
+    turn_off_action:
       - script.stop: run_timer
       - script.execute: update_display
 
@@ -338,6 +338,7 @@ script:
   - id: run_timer
     mode: restart
     then:
+      - logger.log: "Starting timer"
       - while:
           condition:
             - number.in_range:
@@ -350,12 +351,13 @@ script:
                   cycle: false
             - script.execute: update_display
       # Uncomment line below to stop the timer when it runs out
-      # - switch.turn_off: timer_running
+      - switch.turn_off: timer_running
 
   # Updates the duration to the numbers inputs
   - id: update_display
     mode: restart
     then:
+      - logger.log: "Updating display"
       - lambda: |-
           // Score segments that need to be lit for [0-19]
           // {A, B, C, D, E, F, G, T}
